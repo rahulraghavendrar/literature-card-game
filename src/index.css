@@ -1,0 +1,203 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', Georgia, serif;
+  --font-sans: 'Manrope Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Walnut: the room and the furniture */
+  --color-walnut-950: #160e09;
+  --color-walnut-900: #1f150e;
+  --color-walnut-850: #271a11;
+  --color-walnut-800: #302015;
+  --color-walnut-700: #43301f;
+  --color-walnut-600: #5a412b;
+
+  /* Leather: the table top */
+  --color-leather-900: #132823;
+  --color-leather-800: #19342d;
+  --color-leather-700: #214539;
+  --color-leather-600: #2b5848;
+
+  /* Brass: turn, focus, primary actions */
+  --color-brass-200: #f0dca6;
+  --color-brass-300: #e3c77d;
+  --color-brass-400: #d6b45f;
+  --color-brass-500: #c9a24a;
+  --color-brass-600: #a8832f;
+  --color-brass-700: #7d6022;
+
+  /* Vellum: cards and text on dark */
+  --color-vellum-50: #fdfaf3;
+  --color-vellum-100: #f6efe1;
+  --color-vellum-200: #eadfc8;
+  --color-vellum-300: #cfc0a2;
+  --color-vellum-400: #a89878;
+  --color-vellum-500: #857660;
+
+  --color-ink: #1d1a16;
+  --color-suit-red: #b3261e;
+  --color-ember: #e0603a;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    color: var(--color-vellum-100);
+    background-color: var(--color-walnut-900);
+    background-image:
+      radial-gradient(120% 90% at 50% 0%, rgb(90 65 43 / 0.35), transparent 60%),
+      repeating-linear-gradient(
+        93deg,
+        rgb(255 255 255 / 0.012) 0 2px,
+        transparent 2px 9px,
+        rgb(0 0 0 / 0.04) 9px 10px,
+        transparent 10px 23px
+      );
+    background-attachment: fixed;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'tnum' 0;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-brass-300);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  input,
+  select {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .font-display {
+    font-family: var(--font-display);
+    font-optical-sizing: auto;
+  }
+  .numeric {
+    font-variant-numeric: tabular-nums lining-nums;
+  }
+
+  /* Primary action: a brass plate */
+  .btn-brass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    padding: 0.7rem 1.4rem;
+    font-weight: 700;
+    color: var(--color-walnut-950);
+    background: linear-gradient(180deg, var(--color-brass-300), var(--color-brass-500));
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.45),
+      0 1px 0 rgb(0 0 0 / 0.4),
+      0 6px 18px -6px rgb(201 162 74 / 0.55);
+    transition:
+      transform 120ms ease,
+      filter 120ms ease;
+  }
+  .btn-brass:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+  .btn-brass:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .btn-brass:disabled {
+    background: var(--color-walnut-700);
+    color: var(--color-vellum-400);
+    box-shadow: none;
+  }
+
+  .btn-quiet {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    padding: 0.55rem 1.1rem;
+    font-weight: 600;
+    color: var(--color-vellum-100);
+    background: rgb(255 255 255 / 0.04);
+    border: 1px solid rgb(234 223 200 / 0.18);
+    transition: background 120ms ease;
+  }
+  .btn-quiet:hover:not(:disabled) {
+    background: rgb(255 255 255 / 0.09);
+  }
+  .btn-quiet:disabled {
+    opacity: 0.45;
+  }
+
+  .field {
+    width: 100%;
+    border-radius: 10px;
+    padding: 0.55rem 0.8rem;
+    color: var(--color-vellum-50);
+    background: rgb(0 0 0 / 0.28);
+    border: 1px solid rgb(234 223 200 / 0.16);
+    transition: border-color 120ms ease;
+  }
+  .field::placeholder {
+    color: var(--color-vellum-500);
+  }
+  .field:focus {
+    outline: none;
+    border-color: var(--color-brass-400);
+  }
+  .field[aria-invalid='true'] {
+    border-color: var(--color-ember);
+  }
+
+  /* A leather folio panel */
+  .folio {
+    border-radius: 18px;
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.035), transparent 40%),
+      var(--color-walnut-850);
+    border: 1px solid rgb(201 162 74 / 0.22);
+    box-shadow:
+      inset 0 0 0 4px rgb(0 0 0 / 0.12),
+      0 18px 40px -24px rgb(0 0 0 / 0.8);
+  }
+
+  /* The table: tooled leather with a brass inlay */
+  .table-top {
+    background:
+      radial-gradient(70% 60% at 50% 45%, var(--color-leather-600), var(--color-leather-800) 70%, var(--color-leather-900));
+    box-shadow:
+      inset 0 0 0 2px rgb(201 162 74 / 0.55),
+      inset 0 0 0 11px var(--color-leather-800),
+      inset 0 0 0 12px rgb(201 162 74 / 0.28),
+      inset 0 20px 60px rgb(0 0 0 / 0.35),
+      0 0 0 10px var(--color-walnut-700),
+      0 0 0 11px rgb(0 0 0 / 0.4),
+      0 30px 60px -20px rgb(0 0 0 / 0.75);
+  }
+
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-walnut-600) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

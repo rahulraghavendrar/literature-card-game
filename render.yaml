@@ -1,0 +1,12 @@
+# One-click hosting on Render (https://render.com): New → Blueprint → pick this repo.
+services:
+  - type: web
+    name: literature-card-game
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
