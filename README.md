@@ -66,19 +66,21 @@ Settings (environment variables): `PORT` (default 3000), `HOST` (default `0.0.0.
 |---|---|
 | 2–7 of each suit (4 sets) | 2 3 4 5 6 7 of ♦, of ♣, of ♥, of ♠ |
 | 9–A of each suit (4 sets) | 9 10 J Q K A of ♦, of ♣, of ♥, of ♠ |
-| Eights & Jokers (1 set) | 8♦ 8♣ 8♥ 8♠ Joker 1 Joker 2 |
+| Eights & Jokers (1 set) | 8♦ 8♣ 8♥ 8♠ and two Jokers |
 
-All 54 cards are dealt one at a time clockwise; hands differ by at most one card. You see only your own hand — not even your partner's.
+All 54 cards are dealt one at a time clockwise; hands differ by at most one card. You see only your own hand — not even your partner's. The two Jokers are the same card: ask for "a Joker" and either one counts.
 
 **On your turn, ask** one opponent (never your partner) for one card. You may only ask for a card from a set you hold at least one card of, and not for a card you already hold.
 - They have it: it comes to you and you ask again.
-- They don't: play passes to the next player clockwise.
+- They don't: the player you asked takes the turn.
 
 **Or call a set.** When you and your partner hold all six cards of a set between you (or one of you holds all six), call it: choose the set and name every card of it your partner holds. Nothing is collected automatically — you can keep a finished set and call it on a later turn.
-- Right: the six cards leave the game and your team scores **1 point**. Then either keep playing, or let your partner play instead of you. Your partner plays until they miss; after that, play goes to the player clockwise after **you**.
-- Wrong: nothing moves and the turn passes clockwise.
+- Right: the six cards leave the game and your team scores **1 point**. Then either keep playing, or let your partner play instead of you.
+- Wrong: nothing moves and the turn passes to the next player clockwise.
 
-**Turn order.** Seats are fixed and play always moves clockwise. Players with no cards are skipped.
+**Move timer (online).** Each move gets 1 minute by default (the host can choose 30 seconds to 2 minutes, or no timer). A correct guess starts a fresh minute. If time runs out, the turn passes to the next player clockwise.
+
+**Turn order.** A miss hands the turn to the player who was asked; wrong calls and running out of time pass it clockwise. Players with no cards are skipped.
 
 **Winning.** When all nine sets are called, the team with the most points wins. Equal top scores are a draw.
 

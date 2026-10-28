@@ -67,8 +67,9 @@ export function goodMove(s: GameState, preferHandover = false): Action {
   if (call && preferHandover) return call;
   for (const setId of eligibleSets(s, me)) {
     for (const card of requestableCards(s, me, setId)) {
-      const holder = s.players.find((p) => holds(s.hands[p.id], card))!;
-      if (teamOf(s, holder.id) !== teamOf(s, me) && s.hands[holder.id].length > 0) return { kind: 'ask', target: holder.id, card };
+      // An opponent who holds it (for "a Joker", the other joker may be in the asker's own hand).
+      const holder = s.players.find((p) => teamOf(s, p.id) !== teamOf(s, me) && holds(s.hands[p.id], card));
+      if (holder) return { kind: 'ask', target: holder.id, card };
     }
   }
   if (call) return call;

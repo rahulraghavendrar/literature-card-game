@@ -334,24 +334,6 @@ export function LobbyPage({ room }: { room: RoomSnapshot }) {
               <span className="mt-1 block text-xs text-vellum-400">When time runs out, the turn passes to the next player clockwise.</span>
             </label>
 
-            <label className="mt-4 block">
-              <span className="mb-1.5 block text-sm font-semibold text-vellum-200">Time for each move</span>
-              <select
-                className="field"
-                value={turnSeconds}
-                disabled={!isHost}
-                onChange={(e) => void lobby({ type: 'timer', seconds: Number(e.target.value) })}
-                data-testid="lobby-timer"
-              >
-                {TURN_TIMER_OPTIONS.map((sec) => (
-                  <option key={sec} value={sec}>
-                    {sec === 0 ? 'No timer' : sec < 60 ? `${sec} seconds` : sec === 60 ? '1 minute' : `${sec / 60} minutes`}
-                  </option>
-                ))}
-              </select>
-              <span className="mt-1 block text-xs text-vellum-400">If time runs out, the turn passes to the next player.</span>
-            </label>
-
             {issues.length > 0 && (
               <ul className="mt-4 space-y-1 text-sm text-vellum-300" aria-live="polite" data-testid="lobby-issues">
                 {issues.map((m) => (
