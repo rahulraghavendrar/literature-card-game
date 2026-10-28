@@ -19,6 +19,7 @@ const server = await startServer({
   mode,
   eventLockMs: process.env.LITERATURE_EVENT_LOCK_MS ? Number(process.env.LITERATURE_EVENT_LOCK_MS) : undefined,
   allowSeeds: process.env.LITERATURE_ALLOW_SEEDS === '1',
+  timerScale: process.env.LITERATURE_TIMER_SCALE ? Number(process.env.LITERATURE_TIMER_SCALE) : undefined,
 });
 
 const lines = [

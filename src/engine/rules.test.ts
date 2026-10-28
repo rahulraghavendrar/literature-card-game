@@ -5,8 +5,10 @@ import {
   getResult,
   nextClockwiseWithCards,
   requestCard,
+  requestableCards,
   resolveNextTurn,
   teamScores,
+  timeOut,
   validateRequest,
 } from './game';
 import { SET_ORDER } from './deck';
@@ -59,11 +61,46 @@ describe('asking — only from a set you hold', () => {
   });
 
   it('treats the four 8s and both jokers as one set', () => {
-    for (const card of ['8D', '8H', '8S', 'JK1', 'JK2']) {
+    for (const card of ['8D', '8H', '8S', 'JK']) {
       expect(validateRequest(base(), 'p1', 'p2', card).ok).toBe(true);
     }
     const noEight = craftState({ current: 'p1', hands: { p1: ['4H'], p2: ['JK1'], p3: ['5S'], p4: ['8H'] } });
-    expect(rejected(requestCard(noEight, 'p1', 'p2', 'JK1'))!.code).toBe('set-not-held');
+    expect(rejected(requestCard(noEight, 'p1', 'p2', 'JK'))!.code).toBe('set-not-held');
+  });
+});
+
+describe('the two jokers are the same card', () => {
+  it('asking for a Joker gets whichever joker the player holds', () => {
+    // p2 holds the joker known internally as JK1; p1 asks for "a Joker".
+    const s = ask(base(), 'p1', 'p2', 'JK');
+    expect(s.hands.p1).toContain('JK1');
+    expect(s.hands.p2).not.toContain('JK1');
+    expect(s.pendingEvent).toMatchObject({ kind: 'request', cardId: 'JK', success: true });
+    // Asking with either old name means the same thing.
+    const s2 = ask(base(), 'p1', 'p2', 'JK2');
+    expect(s2.hands.p1).toContain('JK1');
+    expect(s2.pendingEvent).toMatchObject({ cardId: 'JK', success: true });
+  });
+
+  it('you can ask for a Joker while holding one, but not while holding both', () => {
+    const one = craftState({ current: 'p1', hands: { p1: ['JK2', '8C'], p2: ['JK1'], p3: ['5S'], p4: ['8H'] } });
+    const s = ask(one, 'p1', 'p2', 'JK');
+    expect(s.hands.p1).toEqual(['8C', 'JK1', 'JK2']);
+    const both = craftState({ current: 'p1', hands: { p1: ['JK1', 'JK2'], p2: ['8D'], p3: ['5S'], p4: ['8H'] } });
+    const err = rejected(requestCard(both, 'p1', 'p2', 'JK'))!;
+    expect(err.code).toBe('already-held');
+    expect(err.message).toMatch(/both Jokers/);
+  });
+
+  it('a player without a joker says no', () => {
+    const s = ask(base(), 'p1', 'p4', 'JK');
+    expect(s.pendingEvent).toMatchObject({ success: false, cardId: 'JK' });
+  });
+
+  it('offers one Joker choice, not two', () => {
+    expect(requestableCards(base(), 'p1', '8J')).toEqual(['8D', '8H', '8S', 'JK']);
+    const both = craftState({ current: 'p1', hands: { p1: ['JK1', 'JK2'], p2: ['8D'], p3: ['5S'], p4: ['8H'] } });
+    expect(requestableCards(both, 'p1', '8J')).toEqual(['8D', '8C', '8H', '8S']);
   });
 });
 
@@ -110,9 +147,9 @@ describe('asking — valid targets', () => {
 
 describe('a correct guess', () => {
   it('moves exactly that card and lets the player ask again', () => {
-    const s = ask(base(), 'p1', 'p2', 'JK1');
-    expect(s.hands.p1).toContain('JK1');
-    expect(s.hands.p2).not.toContain('JK1');
+    const s = ask(base(), 'p1', 'p2', 'QD');
+    expect(s.hands.p1).toContain('QD');
+    expect(s.hands.p2).not.toContain('QD');
     expect(s.currentPlayerId).toBe('p1');
     expect(s.pendingEvent).toMatchObject({ kind: 'request', success: true, turnPassed: false, nextPlayerId: 'p1' });
   });
@@ -131,17 +168,50 @@ describe('a correct guess', () => {
 });
 
 describe('a wrong guess', () => {
-  it('changes no hands and passes the turn to the next player clockwise', () => {
+  it('changes no hands and gives the turn to the player who was asked', () => {
     const s0 = base();
     const s = ask(s0, 'p1', 'p4', '4H'); // p4 doesn't have 4♥
     expect(s.hands).toEqual(s0.hands);
-    expect(s.currentPlayerId).toBe('p2');
-    expect(s.pendingEvent).toMatchObject({ success: false, turnPassed: true, nextPlayerId: 'p2' });
+    expect(s.currentPlayerId).toBe('p4');
+    expect(s.pendingEvent).toMatchObject({ success: false, turnPassed: true, nextPlayerId: 'p4' });
+  });
+
+  it('the turn follows whoever was asked, not the seating order', () => {
+    // p1 asks p4 (the seat before p1): p4 plays next, skipping p2 and p3.
+    const s = ack(ask(base(), 'p1', 'p4', '4H'));
+    expect(s.currentPlayerId).toBe('p4');
+    // p4 holds A♦ (9–A ♦) and asks p1 for the Q♦, which p1 doesn't have: back to p1.
+    const t = ask(s, 'p4', 'p1', 'QD');
+    expect(t.currentPlayerId).toBe('p1');
   });
 
   it('reveals nothing else about the asked player', () => {
     const s = ask(base(), 'p1', 'p4', '4H');
     expect(JSON.stringify(s.pendingEvent)).not.toMatch(/6H|AD|8D|AS/);
+  });
+});
+
+describe('running out of time', () => {
+  it('passes the turn to the next player clockwise and changes no hands', () => {
+    const s0 = base();
+    const r = timeOut(s0, 'p1');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.hands).toEqual(s0.hands);
+    expect(r.state.currentPlayerId).toBe('p2');
+    expect(r.state.pendingEvent).toMatchObject({ kind: 'timeout', playerId: 'p1', nextPlayerId: 'p2', turnPassed: true });
+  });
+
+  it('only applies to the player on turn, and not during an announcement', () => {
+    expect(timeOut(base(), 'p2').ok).toBe(false);
+    const busy = ask(base(), 'p1', 'p2', 'QD');
+    expect(timeOut(busy, 'p1').ok).toBe(false);
+  });
+
+  it('skips players with no cards', () => {
+    const s0 = craftState({ current: 'p1', hands: { p1: ['2H'], p2: [], p3: ['6H'], p4: ['9H'] } });
+    const r = timeOut(s0, 'p1');
+    expect(r.ok && r.state.currentPlayerId).toBe('p3');
   });
 });
 
@@ -190,7 +260,7 @@ describe('calling a set', () => {
     expect(s.hands.p3).toEqual(['4C']);
   });
 
-  it('a wrong call changes nothing and passes the turn clockwise', () => {
+  it('a wrong call changes nothing and passes the turn to the next player clockwise', () => {
     // An opponent (p4) holds 7♥, so the partner can't have it.
     const s0 = craftState({
       current: 'p1',
@@ -260,31 +330,34 @@ describe('handing the turn to your teammate after calling', () => {
     expect(s.resumeAfterId).toBe('p1');
   });
 
-  it('after the partner misses, play goes to the player after the caller', () => {
+  it('when the partner misses, the player they asked takes the turn', () => {
     let s = ack(call(split(), 'p1', 'LH', ['5H', '6H', '7H'], true));
-    s = ask(s, 'p3', 'p4', 'KC'); // nobody... p4 doesn't hold K♣ → miss
-    // Normal order after p3 would be p4; after a handover it resumes after p1 → p2.
-    expect(s.currentPlayerId).toBe('p2');
+    s = ask(s, 'p3', 'p4', 'KC'); // p4 doesn't hold K♣ → miss
+    expect(s.currentPlayerId).toBe('p4');
     expect(s.resumeAfterId).toBeNull();
     expect(s.handoverFromId).toBeNull();
   });
 
-  it('after the partner makes a wrong call, play also resumes after the caller', () => {
+  it('if the partner makes a wrong call or runs out of time, play resumes after the caller', () => {
     let s = ack(call(split(), 'p1', 'LH', ['5H', '6H', '7H'], true));
-    s = call(s, 'p3', 'HC', ['9C', 'JC', 'QC', 'KC']); // p1 has 9♣ but J♣, Q♣ are opponents'
-    expect(s.pendingEvent).toMatchObject({ correct: false });
-    expect(s.currentPlayerId).toBe('p2');
+    const wrong = call(s, 'p3', 'HC', ['9C', 'JC', 'QC', 'KC']); // J♣ and Q♣ are with opponents
+    expect(wrong.pendingEvent).toMatchObject({ correct: false });
+    expect(wrong.currentPlayerId).toBe('p2'); // after p1, not after p3
+    const r = timeOut(s, 'p3');
+    expect(r.ok && r.state.currentPlayerId).toBe('p2');
+    s = ack(wrong);
+    expect(s.resumeAfterId).toBeNull();
   });
 
-  it('skips empty players when resuming, but never gives the missing partner the turn straight back', () => {
-    // p2 has no cards: after p1 comes p3 — but p3 just missed, so p4 is next.
+  it('when resuming, empty players are skipped and the partner doesn’t get the turn straight back', () => {
+    // p2 has no cards: after p1 comes p3 — but p3 just ran out of time, so p4 is next.
     const s0 = craftState({
       current: 'p1',
       hands: { p1: ['2H', '3H', '4H', 'KD'], p2: [], p3: ['5H', '6H', '7H', 'AC', '10C'], p4: ['KH', 'QC'] },
     });
-    let s = ack(call(s0, 'p1', 'LH', ['5H', '6H', '7H'], true));
-    s = ask(s, 'p3', 'p4', 'KC');
-    expect(s.currentPlayerId).toBe('p4');
+    const s = ack(call(s0, 'p1', 'LH', ['5H', '6H', '7H'], true));
+    const r = timeOut(s, 'p3');
+    expect(r.ok && r.state.currentPlayerId).toBe('p4');
   });
 
   it('is not possible when the partner has no cards left after the call', () => {
@@ -297,7 +370,7 @@ describe('handing the turn to your teammate after calling', () => {
     expect(s.pendingEvent).toMatchObject({ handedOver: false });
   });
 
-  it('the partner can call and hand the turn back; play then resumes after the partner', () => {
+  it('the partner can call and hand the turn back; a later timeout resumes after the partner', () => {
     const s0 = craftState({
       current: 'p1',
       hands: {
@@ -311,41 +384,41 @@ describe('handing the turn to your teammate after calling', () => {
     s = ack(call(s, 'p3', 'HC', ['9C', '10C'], true));
     expect(s.currentPlayerId).toBe('p1');
     expect(s.resumeAfterId).toBe('p3');
-    s = ask(s, 'p1', 'p2', 'AD'); // miss
-    expect(s.currentPlayerId).toBe('p4'); // the player after p3
+    const r = timeOut(s, 'p1');
+    expect(r.ok && r.state.currentPlayerId).toBe('p4'); // the player after p3
   });
 
-  it('resolveNextTurn: continue keeps, miss moves clockwise, handover goes to the partner', () => {
+  it('resolveNextTurn: continue keeps, a miss goes to the asked player, pass moves clockwise, handover goes to the partner', () => {
     const s = base();
     expect(resolveNextTurn(s, 'p1', 'continue').nextPlayerId).toBe('p1');
-    expect(resolveNextTurn(s, 'p1', 'miss').nextPlayerId).toBe('p2');
-    expect(resolveNextTurn(s, 'p4', 'miss').nextPlayerId).toBe('p1');
+    expect(resolveNextTurn(s, 'p1', { missedOn: 'p4' }).nextPlayerId).toBe('p4');
+    expect(resolveNextTurn(s, 'p1', 'pass').nextPlayerId).toBe('p2');
+    expect(resolveNextTurn(s, 'p4', 'pass').nextPlayerId).toBe('p1');
     expect(resolveNextTurn(s, 'p1', 'handover')).toEqual({ nextPlayerId: 'p3', resumeAfterId: 'p1', handoverFromId: 'p1' });
   });
 });
 
 describe('clockwise turn order', () => {
-  it('cycles p1 → p2 → p3 → p4 → p1 on repeated misses', () => {
+  it('cycles p1 → p2 → p3 → p4 → p1 when each player runs out of time', () => {
     let s = craftState({ current: 'p1', hands: { p1: ['2H'], p2: ['4D'], p3: ['6C'], p4: ['9S'] } });
-    const asks: Record<string, [string, string]> = { p1: ['p2', '3H'], p2: ['p3', '5D'], p3: ['p4', '7C'], p4: ['p1', '10S'] };
     const order = [s.currentPlayerId!];
     for (let i = 0; i < 8; i++) {
-      const [target, card] = asks[s.currentPlayerId!];
-      s = ack(ask(s, s.currentPlayerId!, target, card));
+      const r = timeOut(s, s.currentPlayerId!);
+      if (!r.ok) throw new Error(r.error.message);
+      s = ack(r.state);
       order.push(s.currentPlayerId!);
     }
     expect(order).toEqual(['p1', 'p2', 'p3', 'p4', 'p1', 'p2', 'p3', 'p4', 'p1']);
   });
 
   it('skips players with no cards and wraps around', () => {
-    const s0 = craftState({ current: 'p1', hands: { p1: ['2H'], p2: [], p3: ['6H'], p4: ['9H'] } });
-    expect(ask(s0, 'p1', 'p4', '3H').currentPlayerId).toBe('p3');
     const six = craftState({
       playerCount: 6,
       current: 'p5',
       hands: { p1: ['2H'], p2: ['4H'], p3: [], p4: ['9H'], p5: ['5H'], p6: [] },
     });
-    expect(ask(six, 'p5', 'p1', '3H').currentPlayerId).toBe('p1');
+    const r = timeOut(six, 'p5');
+    expect(r.ok && r.state.currentPlayerId).toBe('p1');
     expect(nextClockwiseWithCards(six, 'p2')).toBe('p4');
   });
 });

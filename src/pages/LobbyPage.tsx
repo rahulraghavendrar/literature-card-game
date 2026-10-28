@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MAX_NAME_LENGTH, TEAM_COLORS } from '../engine';
+import { MAX_NAME_LENGTH, TEAM_COLORS, TURN_TIMER_OPTIONS } from '../engine';
 import { useOnlineStore } from '../store/onlineStore';
 import type { RoomSnapshot } from '../types/protocol';
 import { Avatar } from '../components/Avatar';
@@ -47,7 +47,7 @@ function CopyLink({ link }: { link: string }) {
 
 export function LobbyPage({ room }: { room: RoomSnapshot }) {
   const { lobby, start, leave, actionError, clearError } = useOnlineStore();
-  const { players, teams, startingPlayer, issues } = room.lobby;
+  const { players, teams, startingPlayer, issues, turnSeconds } = room.lobby;
   const isHost = room.you === room.hostId;
   const me = players.find((p) => p.id === room.you);
   const host = players.find((p) => p.id === room.hostId);
@@ -314,6 +314,42 @@ export function LobbyPage({ room }: { room: RoomSnapshot }) {
                   </option>
                 ))}
               </select>
+            </label>
+
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-vellum-200">Time for each move</span>
+              <select
+                className="field"
+                value={turnSeconds}
+                disabled={!isHost}
+                onChange={(e) => void lobby({ type: 'timer', seconds: Number(e.target.value) })}
+                data-testid="lobby-timer"
+              >
+                {TURN_TIMER_OPTIONS.map((sec) => (
+                  <option key={sec} value={sec}>
+                    {sec === 0 ? 'No timer' : sec < 60 ? `${sec} seconds` : sec === 60 ? '1 minute' : `${sec / 60} minutes`}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-vellum-400">When time runs out, the turn passes to the next player clockwise.</span>
+            </label>
+
+            <label className="mt-4 block">
+              <span className="mb-1.5 block text-sm font-semibold text-vellum-200">Time for each move</span>
+              <select
+                className="field"
+                value={turnSeconds}
+                disabled={!isHost}
+                onChange={(e) => void lobby({ type: 'timer', seconds: Number(e.target.value) })}
+                data-testid="lobby-timer"
+              >
+                {TURN_TIMER_OPTIONS.map((sec) => (
+                  <option key={sec} value={sec}>
+                    {sec === 0 ? 'No timer' : sec < 60 ? `${sec} seconds` : sec === 60 ? '1 minute' : `${sec / 60} minutes`}
+                  </option>
+                ))}
+              </select>
+              <span className="mt-1 block text-xs text-vellum-400">If time runs out, the turn passes to the next player.</span>
             </label>
 
             {issues.length > 0 && (

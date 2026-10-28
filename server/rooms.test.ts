@@ -170,7 +170,8 @@ describe('playing', () => {
       let moved = false;
       for (const setId of eligibleSets(g, me)) {
         for (const card of requestableCards(g, me, setId)) {
-          const holder = g.players.find((p) => g.hands[p.id].includes(card))!;
+          const holds = (h: string[]) => (card === 'JK' ? h.includes('JK1') || h.includes('JK2') : h.includes(card));
+          const holder = g.players.find((p) => holds(g.hands[p.id]))!;
           if (holder.teamId !== myTeam && room.ask(me, holder.id, card).ok) {
             moved = true;
             break;
@@ -209,5 +210,37 @@ describe('playing', () => {
     room.leave(members[2].id);
     expect(room.members).toHaveLength(4);
     expect(room.member(members[2].id)!.connected).toBe(false);
+  });
+});
+
+describe('move clock', () => {
+  function started(seconds: number) {
+    const { room, members } = lobby(['A', 'B', 'C', 'D']);
+    room.lobbyAction(members[0].id, { type: 'timer', seconds });
+    room.lobbyAction(members[0].id, { type: 'start-player', value: members[0].id });
+    room.start(members[0].id);
+    return { room, members };
+  }
+
+  it('gives each move the chosen time, and passes the turn clockwise when it runs out', () => {
+    const { room, members } = started(60);
+    expect(room.syncClock(1_000)).toBe(60_000);
+    expect(room.snapshotFor(members[1].id).turn.deadline).toBe(61_000);
+    expect(room.syncClock(31_000)).toBe(30_000); // the same move keeps its deadline
+    expect(room.expireTurn(40_000)).toBe(false); // not yet
+    expect(room.expireTurn(61_000)).toBe(true);
+    expect(room.game!.pendingEvent).toMatchObject({ kind: 'timeout', playerId: members[0].id, nextPlayerId: members[1].id });
+    expect(room.syncClock(61_000)).toBeNull(); // stopped during the announcement
+    room.acknowledge();
+    expect(room.syncClock(70_000)).toBe(60_000); // fresh time for the next player
+  });
+
+  it('can be turned off, and only the host can change it', () => {
+    const { room, members } = lobby(['A', 'B', 'C', 'D']);
+    expect(room.lobbyAction(members[1].id, { type: 'timer', seconds: 0 }).ok).toBe(false);
+    expect(room.lobbyAction(members[0].id, { type: 'timer', seconds: 45 }).ok).toBe(false);
+    expect(room.lobbyAction(members[0].id, { type: 'timer', seconds: 0 }).ok).toBe(true);
+    room.start(members[0].id);
+    expect(room.syncClock(1_000)).toBeNull();
   });
 });

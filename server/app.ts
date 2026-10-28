@@ -21,6 +21,8 @@ export interface ServerOptions {
   allowSeeds?: boolean;
   /** Close rooms nobody has been connected to for this long (ms). */
   idleRoomMs?: number;
+  /** Multiplies the turn timer (tests use a small value). */
+  timerScale?: number;
   log?: (msg: string) => void;
 }
 
@@ -46,6 +48,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   const log = options.log ?? ((m: string) => console.log(m));
   const eventLockMs = options.eventLockMs ?? 2600;
   const idleRoomMs = options.idleRoomMs ?? 30 * 60_000;
+  const timerScale = options.timerScale ?? 1;
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
   const app = express();
@@ -86,11 +89,34 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
   /** socket id → where that socket sits */
   const seats = new Map<string, { code: string; memberId: string }>();
   const lockTimers = new Map<string, NodeJS.Timeout>();
+  const turnTimers = new Map<string, NodeJS.Timeout>();
 
   const socketsOf = (code: string, memberId: string) =>
     [...seats.entries()].filter(([, s]) => s.code === code && s.memberId === memberId).map(([id]) => id);
 
+  /** Run (or stop) the current player's move clock; when it runs out, pass the turn. */
+  function syncTurnTimer(room: Room) {
+    const ms = room.syncClock(Date.now(), timerScale);
+    clearTimeout(turnTimers.get(room.code));
+    turnTimers.delete(room.code);
+    if (ms === null) return;
+    turnTimers.set(
+      room.code,
+      setTimeout(() => {
+        turnTimers.delete(room.code);
+        if (rooms.get(room.code) !== room) return;
+        if (room.expireTurn()) {
+          broadcast(room);
+          scheduleAcknowledge(room);
+        } else {
+          syncTurnTimer(room);
+        }
+      }, ms + 20),
+    );
+  }
+
   function broadcast(room: Room) {
+    syncTurnTimer(room);
     for (const [socketId, seat] of seats) {
       if (seat.code !== room.code) continue;
       if (!room.member(seat.memberId)) continue;
@@ -198,8 +224,10 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
       seats.delete(socket.id);
       void socket.leave(s.room.code);
       reply(ack, r);
-      if (s.room.isEmpty()) rooms.delete(s.room.code);
-      else broadcast(s.room);
+      if (s.room.isEmpty()) {
+        rooms.delete(s.room.code);
+        clearTimeout(turnTimers.get(s.room.code));
+      } else broadcast(s.room);
     });
 
     socket.on('lobby:action', (a, ack) => {
@@ -234,6 +262,8 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
         rooms.delete(code);
         clearTimeout(lockTimers.get(code));
         lockTimers.delete(code);
+        clearTimeout(turnTimers.get(code));
+        turnTimers.delete(code);
       }
     }
   }, 60_000);
@@ -251,6 +281,7 @@ export async function startServer(options: ServerOptions): Promise<RunningServer
     close: async () => {
       clearInterval(sweeper);
       for (const t of lockTimers.values()) clearTimeout(t);
+      for (const t of turnTimers.values()) clearTimeout(t);
       await io.close();
       await new Promise<void>((resolve) => http.close(() => resolve()));
     },

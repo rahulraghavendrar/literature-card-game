@@ -81,6 +81,7 @@ async function readGame(seats: Seat[], teamCount: number): Promise<GameState> {
     pendingEvent: null,
     eventCounter: 0,
     passTheDevice: false,
+    turnSeconds: 0,
   };
 }
 
@@ -132,15 +133,18 @@ test('four players on four devices play a full online game', async ({ browser })
   // Only the host can start; the others are told who they're waiting for.
   await expect(seats[1].page.getByTestId('waiting-for-host')).toContainText('Waiting for Rahul');
   await expect(seats[1].page.getByTestId('lobby-start')).toHaveCount(0);
+  // This test checks every screen after every move, which takes a while: no move clock.
+  await host.getByTestId('lobby-timer').selectOption('0');
+  await expect(seats[1].page.getByTestId('lobby-timer')).toHaveValue('0');
   await host.getByTestId('lobby-start').click();
 
   let s = await readGame(seats, 2);
   await checkScreens(seats, s);
 
-  // 1. A miss passes the turn clockwise.
-  const before = s.currentPlayerId!;
-  s = await play(seats, s, failingMove(s)!);
-  expect(s.players.findIndex((p) => p.id === s.currentPlayerId)).toBe((s.players.findIndex((p) => p.id === before) + 1) % 4);
+  // 1. A miss hands the turn to the player who was asked.
+  const miss = failingMove(s)!;
+  s = await play(seats, s, miss);
+  expect(s.currentPlayerId).toBe(miss.kind === 'ask' ? miss.target : null);
   await checkScreens(seats, s);
 
   // 2. A wrong call changes nothing and passes the turn.
@@ -221,4 +225,25 @@ test('a wrong room code is explained', async ({ page }) => {
   await page.getByTestId('online-code').fill('ZZZZZ');
   await page.getByTestId('online-submit').click();
   await expect(page.getByTestId('form-error')).toContainText('no room with that code');
+});
+
+test('when a player runs out of time, the turn passes clockwise for everyone', async ({ browser }) => {
+  // The test server runs timers at a tenth of real speed, so "30 seconds" is 3.
+  const { seats } = await openRoom(browser, ['Rahul', 'Priya', 'Arjun', 'Meera']);
+  const host = seats[0].page;
+  await host.getByTestId('lobby-timer').selectOption('30');
+  await host.getByTestId('lobby-starting-player').selectOption('m1');
+  await host.getByTestId('lobby-start').click();
+  for (const x of seats) await expect(x.page.getByTestId('turn-clock')).toBeVisible();
+  // Nobody moves: Rahul runs out of time and the turn passes to Priya, the next seat.
+  await Promise.all(
+    seats.map(async (x) => {
+      const overlay = x.page.getByTestId('request-overlay');
+      await expect(overlay).toHaveAttribute('data-kind', 'timeout', { timeout: 10_000 });
+      await expect(overlay).toContainText('Rahul ran out of time.');
+      await expect(overlay).toContainText('The turn passes to Priya.');
+    }),
+  );
+  await expect(seats[1].page.getByTestId('move-panel')).toBeVisible({ timeout: 10_000 });
+  await expect(seats[1].page.getByTestId('turn-indicator')).toContainText('Priya');
 });

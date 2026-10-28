@@ -1,6 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import type { CardId, Rank, Suit } from '../types/game';
-import { CARD_BY_ID, cardName } from '../engine';
+import { CARD_BY_ID, cardName, isJoker } from '../engine';
 
 /* Suit glyphs drawn as paths in a 100×100 box (font glyphs can turn into emoji). */
 const SUIT_PATHS: Record<Suit, ReactNode> = {
@@ -92,8 +92,8 @@ function FaceArt({ rank, suit, color, tint }: { rank: Rank; suit: Suit; color: s
   );
 }
 
-function JokerArt({ number }: { number: 1 | 2 }) {
-  const color = number === 1 ? RED : INK;
+function JokerArt() {
+  const color = RED;
   return (
     <g>
       <g fill={color} fontFamily="var(--font-display)" fontWeight="700" fontSize="8.5" textAnchor="middle">
@@ -134,16 +134,17 @@ function JokerArt({ number }: { number: 1 | 2 }) {
         fontWeight="600"
         fontSize="11"
       >
-        Joker {number}
+        Joker
       </text>
     </g>
   );
 }
 
 export function CardFaceSvg({ cardId }: { cardId: CardId }) {
-  const card = CARD_BY_ID[cardId];
+  // "JK" (a Joker, as asked for) looks like either joker: they're identical.
+  const card = CARD_BY_ID[cardId === 'JK' ? 'JK1' : cardId];
   const gradId = useId();
-  if (!card) return null;
+  if (!card && !isJoker(cardId)) return null;
   const paper = (
     <>
       <defs>
@@ -155,11 +156,11 @@ export function CardFaceSvg({ cardId }: { cardId: CardId }) {
       <rect x="0.5" y="0.5" width="99" height="139" rx="7" fill={`url(#${gradId})`} stroke="#c9b994" strokeWidth="1" />
     </>
   );
-  if (card.kind === 'joker') {
+  if (!card || card.kind === 'joker') {
     return (
       <>
         {paper}
-        <JokerArt number={card.jokerNumber} />
+        <JokerArt />
       </>
     );
   }

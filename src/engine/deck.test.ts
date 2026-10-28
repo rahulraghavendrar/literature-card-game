@@ -17,7 +17,8 @@ describe('deck', () => {
   it('names cards readably', () => {
     expect(cardName('QH')).toBe('Queen of Hearts');
     expect(cardName('5C')).toBe('5 of Clubs');
-    expect(cardName('JK2')).toBe('Joker 2');
+    expect(cardName('JK1')).toBe('Joker');
+    expect(cardName('JK2')).toBe('Joker');
   });
 });
 

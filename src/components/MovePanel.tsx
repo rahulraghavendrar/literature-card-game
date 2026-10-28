@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { CardId, SetId } from '../types/game';
-import { SET_BY_ID, cardName, cardShortName, type PlayerView } from '../engine';
+import { SET_BY_ID, cardName, cardPhrase, cardShortName, type PlayerView } from '../engine';
 import { Avatar } from './Avatar';
 import { PlayingCard } from './PlayingCard';
 import { cx, playerById, possessive, teamOf } from '../lib/ui';
@@ -219,7 +219,7 @@ function AskForm({
         onClick={() => readyToAsk && onAsk(selection.targetId!, selection.cardId!)}
         data-testid="confirm-ask"
       >
-        {readyToAsk ? `Ask ${target!.name} for the ${cardName(selection.cardId!)}` : 'Choose a player, a set and a card'}
+        {readyToAsk ? `Ask ${target!.name} for ${cardPhrase(selection.cardId!)}` : 'Choose a player, a set and a card'}
       </button>
     </div>
   );
@@ -373,7 +373,7 @@ function CallForm({ view, onCall, canAsk }: { view: PlayerView; onCall: Props['o
             {!canHandOver
               ? `${partnerName} will have no cards left, so they can’t play next.`
               : effectiveHandover
-                ? `${partnerName} plays until they miss; then it’s the player after you.`
+                ? `${partnerName} plays on until they miss.`
                 : myCardsAfter > 0
                   ? 'You carry on asking.'
                   : 'You’ll have no cards left, so play moves on clockwise.'}

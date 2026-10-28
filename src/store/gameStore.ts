@@ -98,7 +98,8 @@ export const useGameStore = create<GameStore>((set, get) => {
   };
 
   const begin = (config: GameConfig, seed: number | undefined) => {
-    engine = createGame(config, seed === undefined ? {} : { rng: seededRng(seed) });
+    // The move timer is for online play; on a shared screen, everyone can see who's slow.
+    engine = createGame({ ...config, turnSeconds: 0 }, seed === undefined ? {} : { rng: seededRng(seed) });
     viewerId = null;
     lastSeed = seed;
     set((s) => ({

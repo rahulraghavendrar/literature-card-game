@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import type { GameEvent } from '../types/game';
-import { SET_BY_ID, cardName, type PublicPlayer, type PublicTeam } from '../engine';
+import { SET_BY_ID, cardName, cardPhrase, type PublicPlayer, type PublicTeam } from '../engine';
 import { Avatar } from './Avatar';
 import { CardBackSvg, CardFaceSvg } from './PlayingCard';
 import { playerById, teamOf } from '../lib/ui';
@@ -89,11 +89,15 @@ function Person({ player, teams, caption }: { player: PublicPlayer | undefined; 
   );
 }
 
+function actorOf(event: GameEvent): string {
+  return event.kind === 'request' ? event.requesterId : event.kind === 'call' ? event.callerId : event.playerId;
+}
+
 function turnLine(event: GameEvent, players: PublicPlayer[]): string {
-  const actorId = event.kind === 'request' ? event.requesterId : event.callerId;
+  const actorId = actorOf(event);
   const actor = playerById(players, actorId)?.name;
   const next = playerById(players, event.nextPlayerId)?.name;
-  const good = event.kind === 'request' ? event.success : event.correct;
+  const good = event.kind === 'request' ? event.success : event.kind === 'call' ? event.correct : false;
   if (event.gameOver) return 'That was the last set. The game is over.';
   if (event.kind === 'call' && event.handedOver) return `${actor} hands the turn to ${next}.`;
   if (!event.turnPassed) return event.kind === 'request' ? `${actor} asks again.` : `${actor} keeps the turn.`;
@@ -138,11 +142,12 @@ export function RequestOverlay({ event, players, teams, onDismiss, paused = fals
     const requester = playerById(players, event.requesterId);
     const target = playerById(players, event.targetId);
     const name = cardName(event.cardId);
+    const phrase = cardPhrase(event.cardId);
     actorId = event.requesterId;
     result = event.success ? 'success' : 'failure';
     headline = (
       <>
-        {requester?.name} asked {target?.name} for the {name}.
+        {requester?.name} asked {target?.name} for {phrase}.
       </>
     );
     stage = (
@@ -197,14 +202,25 @@ export function RequestOverlay({ event, players, teams, onDismiss, paused = fals
     if (revealed) {
       outcome = event.success ? (
         <p className="font-display text-2xl text-brass-200">
-          {target?.name} hands over the {name}.
+          {target?.name} hands over {phrase}.
         </p>
       ) : (
         <p className="font-display text-2xl text-[#f3a58b]">
-          {target?.name} doesn’t have the {name}.
+          {target?.name} doesn’t have {name === 'Joker' ? 'a Joker' : `the ${name}`}.
         </p>
       );
     }
+  } else if (event.kind === 'timeout') {
+    const player = playerById(players, event.playerId);
+    actorId = event.playerId;
+    result = 'timeout';
+    headline = <>{player?.name} ran out of time.</>;
+    stage = (
+      <div className="flex justify-center">
+        <Person player={player} teams={teams} caption="out of time" />
+      </div>
+    );
+    if (revealed) outcome = <p className="font-display text-2xl text-[#f3a58b]">Time’s up.</p>;
   } else {
     const caller = playerById(players, event.callerId);
     const partner = playerById(players, event.partnerId);

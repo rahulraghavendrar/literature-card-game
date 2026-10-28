@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { createDefaultConfig, createGame, getResult, nextClockwiseWithCards, partnerOf, seededRng } from '../src/engine/index.ts';
+import { createDefaultConfig, createGame, getResult, partnerOf, seededRng } from '../src/engine/index.ts';
 import type { GameConfig, GameState } from '../src/types/game.ts';
 import {
   ack,
@@ -76,10 +76,10 @@ test('a full 4-player game on one device, from setup to results, rematch and bac
   await checkTable(page, s, true, viewer);
   viewer = s.currentPlayerId;
 
-  // A miss passes the turn clockwise.
-  const before = s.currentPlayerId!;
-  s = await play(page, s, failingMove(s)!);
-  expect(s.currentPlayerId).toBe(nextClockwiseWithCards(s, before));
+  // A miss hands the turn to the player who was asked.
+  const miss = failingMove(s)!;
+  s = await play(page, s, miss);
+  expect(s.currentPlayerId).toBe(miss.kind === 'ask' ? miss.target : null);
   await checkTable(page, s, true, viewer);
   viewer = s.currentPlayerId;
 
@@ -136,12 +136,11 @@ for (const n of [6, 8, 10]) {
     await checkTable(page, s, passTheDevice, viewer);
     viewer = s.currentPlayerId;
 
-    // Misses walk once round the table, clockwise.
-    const seat = (id: string) => s.players.find((p) => p.id === id)!.seat;
+    // Each miss hands the turn to the player who was asked.
     for (let i = 0; i < n; i++) {
-      const from = s.currentPlayerId!;
-      s = await play(page, s, failingMove(s)!);
-      expect(seat(s.currentPlayerId!)).toBe((seat(from) + 1) % n);
+      const miss = failingMove(s)!;
+      s = await play(page, s, miss);
+      expect(s.currentPlayerId).toBe(miss.kind === 'ask' ? miss.target : null);
       await checkTable(page, s, passTheDevice, viewer);
       viewer = s.currentPlayerId;
     }

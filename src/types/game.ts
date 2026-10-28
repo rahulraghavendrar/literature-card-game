@@ -10,7 +10,11 @@
 export type Suit = 'D' | 'C' | 'H' | 'S';
 export type Rank = '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'A';
 
-/** e.g. "QH" (Queen of Hearts), "10C", "JK1", "JK2". */
+/**
+ * e.g. "QH" (Queen of Hearts), "10C". The two jokers are "JK1" and "JK2"
+ * internally (every card needs its own id) but play as identical cards: a
+ * request for "JK" means "a Joker", and either joker satisfies it.
+ */
 export type CardId = string;
 
 /**
@@ -70,6 +74,8 @@ export interface GameConfig {
   startingPlayer: 'random' | string;
   /** Local play only: show a hand-off screen between turns so hands stay private. */
   passTheDevice: boolean;
+  /** Seconds allowed for each move; 0 turns the timer off. Defaults to 60. */
+  turnSeconds?: number;
 }
 
 export interface Player {
@@ -120,6 +126,15 @@ export type GameEvent =
       nextPlayerId: string | null;
       turnPassed: boolean;
       gameOver: boolean;
+    }
+  | {
+      /** The player on turn ran out of time; the turn passes clockwise. */
+      kind: 'timeout';
+      id: number;
+      playerId: string;
+      nextPlayerId: string | null;
+      turnPassed: boolean;
+      gameOver: boolean;
     };
 
 export interface GameState {
@@ -142,6 +157,8 @@ export interface GameState {
   pendingEvent: GameEvent | null;
   eventCounter: number;
   passTheDevice: boolean;
+  /** Seconds allowed for each move; 0 means no timer. */
+  turnSeconds: number;
 }
 
 export type ErrorCode =

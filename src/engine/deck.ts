@@ -26,6 +26,12 @@ export const RANK_NAME: Record<Rank, string> = {
 export const SET_ORDER: readonly SetId[] = ['LD', 'LC', 'LH', 'LS', '8J', 'HD', 'HC', 'HH', 'HS'];
 
 export const JOKER_IDS = ['JK1', 'JK2'] as const;
+/** What a player asks for when they want a joker: either one will do. */
+export const JOKER = 'JK';
+
+export function isJoker(cardId: string): boolean {
+  return cardId === JOKER || cardId === 'JK1' || cardId === 'JK2';
+}
 
 function setIdFor(rank: Rank, suit: Suit): SetId {
   if (rank === '8') return '8J';
@@ -93,32 +99,37 @@ export function isSetId(id: unknown): id is SetId {
 }
 
 export function setOf(cardId: CardId): SetId {
+  if (cardId === JOKER) return '8J';
   const card = CARD_BY_ID[cardId];
   if (!card) throw new Error(`Unknown card: ${cardId}`);
   return card.setId;
 }
 
-/** "Queen of Hearts", "10 of Clubs", "Joker 1". */
+/** "Queen of Hearts", "10 of Clubs", "Joker" (the two jokers are identical). */
 export function cardName(cardId: CardId): string {
+  if (isJoker(cardId)) return 'Joker';
   const card = CARD_BY_ID[cardId];
-  if (!card) return cardId;
-  if (card.kind === 'joker') return `Joker ${card.jokerNumber}`;
+  if (!card || card.kind === 'joker') return cardId;
   return `${RANK_NAME[card.rank]} of ${SUIT_NAME[card.suit]}`;
 }
 
-/** "Q♥", "10♣", "Joker 1". */
+/** "the Queen of Hearts", "a Joker" — for sentences like "asked Priya for …". */
+export function cardPhrase(cardId: CardId): string {
+  return isJoker(cardId) ? 'a Joker' : `the ${cardName(cardId)}`;
+}
+
+/** "Q♥", "10♣", "Joker". */
 export function cardShortName(cardId: CardId): string {
+  if (isJoker(cardId)) return 'Joker';
   const card = CARD_BY_ID[cardId];
-  if (!card) return cardId;
-  if (card.kind === 'joker') return `Joker ${card.jokerNumber}`;
+  if (!card || card.kind === 'joker') return cardId;
   return `${card.rank}${SUIT_SYMBOL[card.suit]}`;
 }
 
 export function isRedCard(cardId: CardId): boolean {
+  if (isJoker(cardId)) return true;
   const card = CARD_BY_ID[cardId];
-  if (!card) return false;
-  if (card.kind === 'joker') return card.jokerNumber === 1;
-  return card.suit === 'H' || card.suit === 'D';
+  return !!card && card.kind === 'standard' && (card.suit === 'H' || card.suit === 'D');
 }
 
 const SORT_KEY: Record<CardId, number> = Object.fromEntries(

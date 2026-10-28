@@ -28,6 +28,8 @@ export interface GameTableProps {
   banner?: ReactNode;
   offlineIds?: string[];
   gameKey: string | number;
+  /** The move clock, if one is running. */
+  clock?: { deadline: number | null; offset: number };
 }
 
 /** The game screen shared by local and online play. */
@@ -46,6 +48,7 @@ export function GameTable({
   banner,
   offlineIds,
   gameKey,
+  clock,
 }: GameTableProps) {
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
 
@@ -93,7 +96,7 @@ export function GameTable({
         <main className="grid flex-1 gap-4 p-3 sm:p-4 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_minmax(340px,400px)]">
           <div className="flex min-h-0 flex-col">
             <div className="relative min-h-[360px] flex-1 sm:min-h-[420px]">
-              <Table view={view} offlineIds={offlineIds} />
+              <Table view={view} offlineIds={offlineIds} clock={clock} />
             </div>
             <div className="mt-10 shrink-0 px-2 sm:mt-6 lg:mt-2">
               {hidden ? (

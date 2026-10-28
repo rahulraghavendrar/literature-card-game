@@ -10,7 +10,7 @@ import type {
   Player,
   SetId,
 } from '../types/game';
-import { ALL_CARD_IDS, SET_BY_ID, SET_ORDER, cardName, isCardId, isSetId, setOf, sortCards } from './deck';
+import { ALL_CARD_IDS, JOKER, JOKER_IDS, SET_BY_ID, SET_ORDER, cardName, cardPhrase, isCardId, isJoker, isSetId, setOf, sortCards } from './deck';
 import { dealCards } from './deal';
 import { validateConfig } from './config';
 import { cryptoRng, randomInt, shuffle, type Rng } from './random';
@@ -72,13 +72,14 @@ export function nextClockwiseWithCards(state: GameState, fromId: string, exclude
 
 /**
  * What ended (or continued) the actor's go:
- * - 'continue': a card was received, or a set was called correctly and the
- *   caller keeps playing.
- * - 'miss': the asked player didn't have the card, or a call was wrong.
+ * - 'continue': the asked player had the card, or a set was called correctly
+ *   and the caller keeps playing.
+ * - { missedOn }: the asked player didn't have the card — they take the turn.
+ * - 'pass': a wrong call, or the actor ran out of time — play moves clockwise.
  * - 'handover': a set was called correctly and the caller hands the turn to
  *   their partner.
  */
-export type TurnOutcome = 'continue' | 'miss' | 'handover';
+export type TurnOutcome = 'continue' | 'pass' | 'handover' | { missedOn: string };
 
 export interface TurnTransition {
   nextPlayerId: string | null;
@@ -87,17 +88,24 @@ export interface TurnTransition {
 }
 
 /**
- * Centralised turn transition. Play always moves clockwise and never
- * reverses; players without cards are skipped.
+ * Centralised turn transition — the only place the next player is decided.
  *
  * - continue: the actor keeps the turn while they hold cards; with no cards
  *   left, play moves clockwise (from the original caller during a handover).
- * - miss: play moves to the next player clockwise. During a handover turn,
- *   "next" is counted from the player who handed over, not from the partner.
- * - handover: the actor's partner plays next; afterwards play resumes
- *   clockwise from the actor.
+ * - missed: the player who was asked takes the turn (they always hold cards,
+ *   since only players with cards can be asked).
+ * - pass: play moves to the next player clockwise who holds cards. During a
+ *   handed-over turn, "next" is counted from the player who handed over.
+ * - handover: the actor's partner plays next.
+ * Direction never reverses and players without cards are skipped.
  */
 export function resolveNextTurn(state: GameState, actorId: string, outcome: TurnOutcome): TurnTransition {
+  if (typeof outcome === 'object') {
+    if (handSize(state, outcome.missedOn) > 0) {
+      return { nextPlayerId: outcome.missedOn, resumeAfterId: null, handoverFromId: null };
+    }
+    outcome = 'pass';
+  }
   if (outcome === 'handover') {
     const partner = partnerOf(state, actorId);
     if (partner && handSize(state, partner.id) > 0) {
@@ -109,7 +117,7 @@ export function resolveNextTurn(state: GameState, actorId: string, outcome: Turn
     return { nextPlayerId: actorId, resumeAfterId: state.resumeAfterId, handoverFromId: state.handoverFromId };
   }
   const from = state.resumeAfterId ?? actorId;
-  const exclude = outcome === 'miss' ? actorId : null;
+  const exclude = outcome === 'pass' ? actorId : null;
   return { nextPlayerId: nextClockwiseWithCards(state, from, exclude), resumeAfterId: null, handoverFromId: null };
 }
 
@@ -159,8 +167,11 @@ export function createGame(config: GameConfig, options: CreateGameOptions = {}):
     pendingEvent: null,
     eventCounter: 0,
     passTheDevice: config.passTheDevice,
+    turnSeconds: Math.max(0, Math.round(config.turnSeconds ?? DEFAULT_TURN_SECONDS)),
   };
 }
+
+export const DEFAULT_TURN_SECONDS = 60;
 
 // ---------------------------------------------------------------------------
 // Validation shared by every action
@@ -201,16 +212,21 @@ export function targetProblem(state: GameState, requesterId: string, targetId: s
  * You may only ask for a card from a set you already hold a card of.
  */
 export function cardProblem(state: GameState, requesterId: string, cardId: string): ActionError | null {
-  if (!isCardId(cardId)) return { code: 'unknown-card', message: 'That card does not exist.' };
   const hand = state.hands[requesterId] ?? [];
-  if (hand.includes(cardId)) return { code: 'already-held', message: `You already hold the ${cardName(cardId)}.` };
+  if (isJoker(cardId)) {
+    // The two jokers are identical: you can ask for "a Joker" unless you hold both.
+    if (JOKER_IDS.every((j) => hand.includes(j))) return { code: 'already-held', message: 'You already hold both Jokers.' };
+  } else {
+    if (!isCardId(cardId)) return { code: 'unknown-card', message: 'That card does not exist.' };
+    if (hand.includes(cardId)) return { code: 'already-held', message: `You already hold the ${cardName(cardId)}.` };
+  }
   const setId = setOf(cardId);
   const set = SET_BY_ID[setId];
   if (isSetCalled(state, setId)) return { code: 'set-called', message: `${set.short} has already been called.` };
   if (!hand.some((c) => setOf(c) === setId)) {
     return {
       code: 'set-not-held',
-      message: `You can only ask for the ${cardName(cardId)} if you hold a card from ${set.short}.`,
+      message: `You can only ask for ${cardPhrase(cardId)} if you hold a card from ${set.short}.`,
     };
   }
   return null;
@@ -246,22 +262,26 @@ function withEvent(state: GameState, transition: TurnTransition, event: (id: num
 }
 
 /**
- * Ask `targetId` for `cardId`. A hit moves the card and the requester asks
- * again; a miss passes the turn clockwise. Nothing is collected automatically:
- * complete sets stay in hand until a team member calls them.
+ * Ask `targetId` for `cardId` (or for "JK", a Joker — either one counts).
+ * A hit moves the card and the requester asks again; a miss hands the turn to
+ * the player who was asked. Nothing is collected automatically: complete sets
+ * stay in hand until a team member calls them.
  */
 export function requestCard(state: GameState, requesterId: string, targetId: string, cardId: string): ActionResult {
-  const check = validateRequest(state, requesterId, targetId, cardId);
+  const asked = isJoker(cardId) ? JOKER : cardId;
+  const check = validateRequest(state, requesterId, targetId, asked);
   if (!check.ok) return check;
 
   const hands = { ...state.hands };
-  const success = hands[targetId].includes(cardId);
-  if (success) {
-    hands[targetId] = hands[targetId].filter((c) => c !== cardId);
-    hands[requesterId] = sortCards([...hands[requesterId], cardId]);
+  // The actual card handed over: for a Joker request, whichever joker the target has.
+  const given = asked === JOKER ? JOKER_IDS.find((j) => hands[targetId].includes(j)) : hands[targetId].includes(asked) ? asked : undefined;
+  const success = given !== undefined;
+  if (given) {
+    hands[targetId] = hands[targetId].filter((c) => c !== given);
+    hands[requesterId] = sortCards([...hands[requesterId], given]);
   }
   const interim: GameState = { ...state, hands };
-  const transition = resolveNextTurn(interim, requesterId, success ? 'continue' : 'miss');
+  const transition = resolveNextTurn(interim, requesterId, success ? 'continue' : { missedOn: targetId });
   return {
     ok: true,
     state: withEvent(interim, transition, (id, gameOver) => ({
@@ -269,10 +289,32 @@ export function requestCard(state: GameState, requesterId: string, targetId: str
       id,
       requesterId,
       targetId,
-      cardId,
+      cardId: asked,
       success,
       nextPlayerId: transition.nextPlayerId,
       turnPassed: transition.nextPlayerId !== requesterId,
+      gameOver,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Running out of time
+// ---------------------------------------------------------------------------
+
+/** The player on turn ran out of time: the turn passes clockwise. */
+export function timeOut(state: GameState, playerId: string): ActionResult {
+  const actorErr = validateActor(state, playerId);
+  if (actorErr) return { ok: false, error: actorErr };
+  const transition = resolveNextTurn(state, playerId, 'pass');
+  return {
+    ok: true,
+    state: withEvent(state, transition, (id, gameOver) => ({
+      kind: 'timeout',
+      id,
+      playerId,
+      nextPlayerId: transition.nextPlayerId,
+      turnPassed: transition.nextPlayerId !== playerId,
       gameOver,
     })),
   };
@@ -332,7 +374,7 @@ export function validateCall(
  *
  * Correct: the six cards leave both hands, the team scores a point, and the
  * caller either keeps playing or hands the turn to their partner.
- * Wrong: nothing moves and the turn passes clockwise.
+ * Wrong: nothing moves and the turn passes to the next player clockwise.
  */
 export function callSet(
   state: GameState,
@@ -367,7 +409,7 @@ export function callSet(
     };
   }
 
-  const transition = resolveNextTurn(interim, callerId, correct ? (handover ? 'handover' : 'continue') : 'miss');
+  const transition = resolveNextTurn(interim, callerId, correct ? (handover ? 'handover' : 'continue') : 'pass');
   const handedOver = correct && transition.handoverFromId === callerId && transition.nextPlayerId === partner.id;
   return {
     ok: true,
@@ -406,11 +448,20 @@ export function eligibleSets(state: GameState, playerId: string): SetId[] {
   return SET_ORDER.filter((id) => !isSetCalled(state, id) && hand.some((c) => setOf(c) === id));
 }
 
-/** Cards from `setId` this player could request (the ones they don't hold). */
+/**
+ * What this player could request from `setId`: the cards they don't hold.
+ * For Eights & Jokers, the two jokers count as one request, "JK" (a Joker),
+ * available unless the player holds both.
+ */
 export function requestableCards(state: GameState, playerId: string, setId: SetId): CardId[] {
   if (!eligibleSets(state, playerId).includes(setId)) return [];
-  const hand = state.hands[playerId] ?? [];
-  return SET_BY_ID[setId].cards.filter((c) => !hand.includes(c));
+  return askableItems(setId).filter((c) => cardProblem(state, playerId, c) === null);
+}
+
+/** The things you can ask for from a set: its cards, with the two jokers as one "JK". */
+export function askableItems(setId: SetId): CardId[] {
+  const cards = SET_BY_ID[setId].cards.filter((c) => !isJoker(c));
+  return setId === '8J' ? [...cards, JOKER] : [...cards];
 }
 
 /** Opponents who can be asked (still hold cards). */

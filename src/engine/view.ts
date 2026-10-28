@@ -1,6 +1,6 @@
 import type { CalledSet, CardId, GameEvent, GameState, SetCategory, SetId, Team } from '../types/game';
 import { SET_BY_ID, SET_ORDER, setOf } from './deck';
-import { cardProblem, eligibleSets, handSize, partnerOf, targetProblem, teamScores, uncalledSets } from './game';
+import { askableItems, cardProblem, eligibleSets, handSize, partnerOf, targetProblem, teamScores, uncalledSets } from './game';
 
 /**
  * What one player is allowed to see. This is the ONLY game data handed to UI
@@ -19,6 +19,8 @@ export interface PlayerView {
   /** During a handover, the player play resumes after once the turn ends. */
   resumeAfterId: string | null;
   status: GameState['status'];
+  /** Seconds allowed for each move; 0 means no timer. */
+  turnSeconds: number;
   players: PublicPlayer[];
   teams: PublicTeam[];
   sets: PublicSet[];
@@ -70,7 +72,7 @@ export interface TurnOptions {
   targets: Option<string>[];
   /** Sets the viewer holds a card of (the only sets they may ask from). */
   sets: Option<SetId>[];
-  /** For each held set: every card in it; cards the viewer holds are unavailable. */
+  /** For each held set: what can be asked for (the two jokers count as one "JK"); held cards are unavailable. */
   cardsBySet: Partial<Record<SetId, Option<CardId>[]>>;
   /** Every set still in play can be called. */
   callableSets: CallOption[];
@@ -88,7 +90,7 @@ function buildOptions(state: GameState, viewerId: string): TurnOptions {
   const sets = held.map((id) => ({ id, available: true, reason: null }));
   const cardsBySet: Partial<Record<SetId, Option<CardId>[]>> = {};
   for (const setId of held) {
-    cardsBySet[setId] = SET_BY_ID[setId].cards.map((cardId) => {
+    cardsBySet[setId] = askableItems(setId).map((cardId) => {
       const problem = cardProblem(state, viewerId, cardId);
       return { id: cardId, available: problem === null, reason: problem?.message ?? null };
     });
@@ -122,6 +124,7 @@ export function getPlayerView(state: GameState, viewerId: string | null): Player
     handoverFromId: state.handoverFromId,
     resumeAfterId: state.resumeAfterId,
     status: state.status,
+    turnSeconds: state.turnSeconds,
     players: state.players.map((p) => ({
       id: p.id,
       name: p.name,

@@ -7,7 +7,7 @@ import { possessive } from '../lib/ui';
 
 /** Online play: this screen belongs to one player and shows only their hand. */
 export function OnlineGamePage({ room }: { room: RoomSnapshot }) {
-  const { overlay, actionError, connection, ask, call, dismissOverlay, clearError, leave } = useOnlineStore();
+  const { overlay, actionError, connection, ask, call, dismissOverlay, clearError, leave, clockOffset } = useOnlineStore();
   const [menuOpen, setMenuOpen] = useState(false);
   const game = room.game!;
   const view = game.view;
@@ -49,6 +49,7 @@ export function OnlineGamePage({ room }: { room: RoomSnapshot }) {
         banner={banner}
         offlineIds={offlineIds}
         gameKey={room.code}
+        clock={{ deadline: room.turn.deadline, offset: clockOffset }}
       />
       <GameMenu
         open={menuOpen}

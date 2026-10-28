@@ -64,6 +64,8 @@ export interface OnlineStore {
   /** Why this player was sent out of the room, if they were. */
   removedReason: string | null;
   lanUrls: string[];
+  /** serverNow − Date.now(), so countdowns use the server's clock. */
+  clockOffset: number;
 
   create: (name: string) => Promise<boolean>;
   join: (code: string, name: string) => Promise<boolean>;
@@ -91,7 +93,7 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
     if (snapshot.phase === 'game' && lastPhase !== 'game') shownEventId = 0;
     lastPhase = snapshot.phase;
     const event = snapshot.game?.event ?? null;
-    const patch: Partial<OnlineStore> = { room: snapshot };
+    const patch: Partial<OnlineStore> = { room: snapshot, clockOffset: snapshot.turn.serverNow - Date.now() };
     if (event && event.id !== shownEventId) {
       shownEventId = event.id;
       patch.overlay = event;
@@ -155,6 +157,7 @@ export const useOnlineStore = create<OnlineStore>((set, get) => {
     actionError: null,
     removedReason: null,
     lanUrls: [],
+    clockOffset: 0,
 
     create: async (name) => {
       set({ busy: true, formError: null });

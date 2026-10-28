@@ -5,6 +5,9 @@ export const MAX_PLAYERS = 10;
 export const TEAM_SIZE = 2;
 export const MAX_NAME_LENGTH = 16;
 
+/** Turn timer choices, in seconds (0 = no timer). */
+export const TURN_TIMER_OPTIONS = [0, 30, 60, 90, 120] as const;
+
 /** Bookcloth colours offered for teams. */
 export const TEAM_COLORS: readonly { name: string; hex: string }[] = [
   { name: 'Crimson', hex: '#c8423b' },
@@ -48,7 +51,7 @@ export function createDefaultConfig(playerCount: number): GameConfig {
     name: `Player ${i + 1}`,
     teamId: teams[i % teamCount].id,
   }));
-  return { players, teams, startingPlayer: players[0].id, passTheDevice: true };
+  return { players, teams, startingPlayer: players[0].id, passTheDevice: true, turnSeconds: 0 };
 }
 
 /** Validate a configuration before a game can start. Returns [] when valid. */

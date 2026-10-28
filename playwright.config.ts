@@ -18,7 +18,7 @@ export default defineConfig({
   webServer: {
     // The real game server, with announcements held for a shorter time.
     command: `npm run build && npx tsx server/index.ts`,
-    env: { PORT: String(PORT), HOST: '127.0.0.1', LITERATURE_EVENT_LOCK_MS: '250' },
+    env: { PORT: String(PORT), HOST: '127.0.0.1', LITERATURE_EVENT_LOCK_MS: '250', LITERATURE_TIMER_SCALE: '0.1' },
     url: `http://127.0.0.1:${PORT}/healthz`,
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

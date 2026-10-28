@@ -15,6 +15,8 @@ export interface LobbyState {
   players: LobbyPlayer[];
   teams: Team[];
   startingPlayer: 'random' | string;
+  /** Seconds allowed for each move; 0 = no timer. */
+  turnSeconds: number;
   /** Problems that stop the host starting the game. */
   issues: string[];
 }
@@ -29,6 +31,8 @@ export interface RoomSnapshot {
   /** Present during a game and on the results screen. Contains only `you`'s own hand. */
   game: { view: PlayerView; event: GameEvent | null } | null;
   result: GameResult | null;
+  /** The move clock: when the current player's time runs out (server time, ms), or null if no clock is running. */
+  turn: { deadline: number | null; serverNow: number };
 }
 
 export type Ack<T extends object = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -40,6 +44,7 @@ export type LobbyAction =
   | { type: 'alternate' }
   | { type: 'team'; teamId: string; name?: string; color?: string }
   | { type: 'start-player'; value: string }
+  | { type: 'timer'; seconds: number }
   | { type: 'kick'; playerId: string };
 
 export interface JoinResult {

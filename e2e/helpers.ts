@@ -38,6 +38,9 @@ export function ack(state: GameState): GameState {
   return r.ok ? r.state : state;
 }
 
+/** Does this hand satisfy a request? ("JK" = either joker.) */
+export const holds = (hand: string[], card: string) => (card === 'JK' ? hand.includes('JK1') || hand.includes('JK2') : hand.includes(card));
+
 export const teamOf = (s: GameState, id: string) => s.players.find((p) => p.id === id)!.teamId;
 export const nameOf = (s: GameState, id: string) => s.players.find((p) => p.id === id)!.name;
 
@@ -64,7 +67,7 @@ export function goodMove(s: GameState, preferHandover = false): Action {
   if (call && preferHandover) return call;
   for (const setId of eligibleSets(s, me)) {
     for (const card of requestableCards(s, me, setId)) {
-      const holder = s.players.find((p) => s.hands[p.id].includes(card))!;
+      const holder = s.players.find((p) => holds(s.hands[p.id], card))!;
       if (teamOf(s, holder.id) !== teamOf(s, me) && s.hands[holder.id].length > 0) return { kind: 'ask', target: holder.id, card };
     }
   }
@@ -78,7 +81,7 @@ export function failingMove(s: GameState): Action | null {
   for (const setId of eligibleSets(s, me)) {
     for (const card of requestableCards(s, me, setId)) {
       const target = s.players.find(
-        (p) => teamOf(s, p.id) !== teamOf(s, me) && s.hands[p.id].length > 0 && !s.hands[p.id].includes(card),
+        (p) => teamOf(s, p.id) !== teamOf(s, me) && s.hands[p.id].length > 0 && !holds(s.hands[p.id], card),
       );
       if (target) return { kind: 'ask', target: target.id, card };
     }
@@ -89,7 +92,8 @@ export function failingMove(s: GameState): Action | null {
 export function expectedResult(s: GameState, action: Action): string {
   const next = apply(s, action).pendingEvent!;
   if (next.kind === 'request') return next.success ? 'success' : 'failure';
-  return next.correct ? 'correct' : 'wrong';
+  if (next.kind === 'call') return next.correct ? 'correct' : 'wrong';
+  return 'timeout';
 }
 
 /** Make a move through the UI, exactly like a player would. */

@@ -5,6 +5,7 @@ import {
   MAX_NAME_LENGTH,
   MAX_PLAYERS,
   TEAM_COLORS,
+  TURN_TIMER_OPTIONS,
   acknowledgeEvent,
   alternateSeating,
   callSet,
@@ -13,6 +14,7 @@ import {
   getResult,
   publicEvent,
   requestCard,
+  timeOut,
   validateConfig,
   type GameResult,
   type Rng,
@@ -67,6 +69,11 @@ export class Room {
   members: Member[] = [];
   teams: Team[] = [];
   startingPlayer: 'random' | string = 'random';
+  /** Seconds allowed for each move; 0 = no timer. */
+  turnSeconds = 60;
+  /** When the current player's time runs out (ms since epoch), or null. */
+  turnDeadline: number | null = null;
+  private clockKey: string | null = null;
   phase: 'lobby' | 'game' | 'results' = 'lobby';
   game: GameState | null = null;
   result: GameResult | null = null;
@@ -214,6 +221,7 @@ export class Room {
       teams: this.teams.map((t) => ({ ...t })),
       startingPlayer: this.startingPlayer,
       passTheDevice: false,
+      turnSeconds: this.turnSeconds,
     };
   }
 
@@ -285,6 +293,12 @@ export class Room {
         this.startingPlayer = action.value;
         break;
       }
+      case 'timer': {
+        if (!isHost) return err('Only the host can set the turn timer.');
+        if (!(TURN_TIMER_OPTIONS as readonly number[]).includes(action.seconds)) return err('Pick one of the timer options.');
+        this.turnSeconds = action.seconds;
+        break;
+      }
       case 'kick': {
         if (!isHost) return err('Only the host can remove players.');
         if (action.playerId === actorId) return err('Use “Leave room” to leave.');
@@ -311,6 +325,8 @@ export class Room {
     const issues = this.issues();
     if (issues.length > 0) return err(issues[0]);
     this.game = createGame(this.config(), { rng: this.options.rng?.() });
+    this.clockKey = null;
+    this.turnDeadline = null;
     this.phase = 'game';
     this.result = null;
     this.touch();
@@ -381,6 +397,43 @@ export class Room {
   }
 
   // -------------------------------------------------------------------------
+  // The move clock
+  // -------------------------------------------------------------------------
+
+  /**
+   * Start or keep the clock for the move that is now due. Every new move
+   * (after each announcement) gets the full time; the clock is stopped while
+   * an announcement is on screen. Returns ms until it runs out, or null when
+   * no clock should run. `scale` shortens the timer for tests.
+   */
+  syncClock(now = Date.now(), scale = 1): number | null {
+    const g = this.game;
+    if (this.phase !== 'game' || !g || g.status !== 'playing' || g.pendingEvent || !g.turnSeconds) {
+      this.turnDeadline = null;
+      this.clockKey = null;
+      return null;
+    }
+    const key = `${g.eventCounter}:${g.currentPlayerId}`;
+    if (key !== this.clockKey || this.turnDeadline === null) {
+      this.clockKey = key;
+      this.turnDeadline = now + g.turnSeconds * 1000 * scale;
+    }
+    return Math.max(0, this.turnDeadline - now);
+  }
+
+  /** The current player's time is up: pass the turn. Returns true if it did. */
+  expireTurn(now = Date.now()): boolean {
+    const g = this.game;
+    if (!g || this.turnDeadline === null || now < this.turnDeadline - 100 || !g.currentPlayerId) return false;
+    const r = timeOut(g, g.currentPlayerId);
+    if (!r.ok) return false;
+    this.game = r.state;
+    this.turnDeadline = null;
+    this.touch();
+    return true;
+  }
+
+  // -------------------------------------------------------------------------
   // What each player receives
   // -------------------------------------------------------------------------
 
@@ -394,12 +447,14 @@ export class Room {
         players: this.members.map((m) => ({ id: m.id, name: m.name, teamId: m.teamId, connected: m.connected })),
         teams: this.teams.map((t) => ({ ...t })),
         startingPlayer: this.startingPlayer,
+        turnSeconds: this.turnSeconds,
         issues: this.phase === 'lobby' ? this.issues() : [],
       },
       game: this.game
         ? { view: getPlayerView(this.game, this.member(memberId) ? memberId : null), event: publicEvent(this.game.pendingEvent) }
         : null,
       result: this.result ? { ...this.result, scores: { ...this.result.scores }, leaders: [...this.result.leaders] } : null,
+      turn: { deadline: this.turnDeadline, serverNow: Date.now() },
     };
   }
 

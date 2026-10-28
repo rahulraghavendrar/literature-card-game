@@ -40,6 +40,7 @@ export function craftState({
     pendingEvent: null,
     eventCounter: 0,
     passTheDevice: false,
+    turnSeconds: 0,
   };
 }
 

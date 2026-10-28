@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import type { PlayerView } from '../engine';
 import { Avatar } from './Avatar';
 import { PlayingCard } from './PlayingCard';
+import { TurnClock } from './TurnClock';
 import { cx, plural, possessive, teamOf } from '../lib/ui';
 
 /**
@@ -9,7 +10,15 @@ import { cx, plural, possessive, teamOf } from '../lib/ui';
  * holding the device sits at the bottom. Rotation preserves clockwise order:
  * from the bottom, play moves left, across the top, then down the right.
  */
-export function Table({ view, offlineIds = [] }: { view: PlayerView; offlineIds?: string[] }) {
+export function Table({
+  view,
+  offlineIds = [],
+  clock,
+}: {
+  view: PlayerView;
+  offlineIds?: string[];
+  clock?: { deadline: number | null; offset: number };
+}) {
   const n = view.players.length;
   const anchorId = view.viewerId ?? view.currentPlayerId ?? view.players[0].id;
   const anchorSeat = view.players.find((p) => p.id === anchorId)?.seat ?? 0;
@@ -17,7 +26,6 @@ export function Table({ view, offlineIds = [] }: { view: PlayerView; offlineIds?
   const currentTeam = teamOf(view.teams, current?.teamId);
   const inPlay = view.sets.filter((s) => s.status === 'in-play').length;
   const handoverFrom = view.players.find((p) => p.id === view.handoverFromId);
-  const resumeAfter = view.players.find((p) => p.id === view.resumeAfterId);
 
   return (
     <div className="relative h-full w-full" data-testid="table">
@@ -60,9 +68,9 @@ export function Table({ view, offlineIds = [] }: { view: PlayerView; offlineIds?
                 {handoverFrom && (
                   <p className="mt-1.5 text-xs text-vellum-200" data-testid="handover-note">
                     handed over by {handoverFrom.name}
-                    {resumeAfter && <span className="block text-vellum-400">after a miss, play goes on from {resumeAfter.name}</span>}
                   </p>
                 )}
+                {clock && <TurnClock deadline={clock.deadline} offset={clock.offset} total={view.turnSeconds} />}
               </>
             ) : (
               <p className="font-display text-xl text-vellum-100">Game over</p>

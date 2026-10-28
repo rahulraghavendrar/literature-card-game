@@ -59,7 +59,9 @@ describe('player view privacy', () => {
     const lowHearts = opts.cardsBySet.LH!;
     expect(lowHearts.find((c) => c.id === '3H')!.available).toBe(false);
     expect(lowHearts.filter((c) => c.available).map((c) => c.id)).toEqual(['2H', '4H', '5H', '6H', '7H']);
-    expect(opts.cardsBySet['8J']!.filter((c) => c.available)).toHaveLength(5);
+    // 8s & Jokers: four 8s plus one "Joker" choice (p1 holds 8♣).
+    expect(opts.cardsBySet['8J']!.map((c) => c.id)).toEqual(['8D', '8C', '8H', '8S', 'JK']);
+    expect(opts.cardsBySet['8J']!.filter((c) => c.available).map((c) => c.id)).toEqual(['8D', '8H', '8S', 'JK']);
     // Every uncalled set can be called; the cards to name are the ones p1 lacks.
     expect(opts.callableSets).toHaveLength(9);
     const call = opts.callableSets.find((c) => c.id === 'HD')!;
